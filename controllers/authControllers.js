@@ -266,26 +266,35 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
     .createHash('sha256')
     .update(req.params.resetToken)
     .digest('hex');
-
+  console.log(1);
   const user = await User.findOne({
     passwordResetToken: hashedToken,
     passwordResetExpires: { $gt: Date.now() }
   });
+  console.log(2);
 
   // 2) If token has not expired, and there is user, set the new password
   if (!user) {
     return next(new AppError({ english: 'Token is invalid or has expired', arabic: 'الرمز غير صالح او منتهي الصلاحية' }, 400));
   }
-
+  console.log(3);
+  
   user.password = req.body.password;
+  console.log(4);
   user.passwordConfirm = req.body.passwordConfirm;
+  console.log(5);
   user.passwordResetToken = undefined;
+  console.log(6);
   user.passwordResetExpires = undefined;
+  console.log(7);
   await user.save();
+
+  console.log(8);
 
   // 3) Update changedPasswordAt property for the user
   // 4) Log the user in, send JWT
   createSendToken(user, 200, res);
+  console.log(9);
 });
 
 exports.updatePassword = catchAsync(async (req, res, next) => {
