@@ -9,6 +9,7 @@ exports.createPlace = catchAsync(async (req, res, next) => {
     const place = await Place.create(req.body);
     res.status(201).json({
         status: "success",
+        massage: "Place created successfully",
         data: {
             place
         }
@@ -41,7 +42,7 @@ exports.getPlace = catchAsync(async (req, res, next) => {
 
 
     if (!place) {
-        return next(new AppError('City not found', 404));
+        return next(new AppError({ english: "City not found", arabic: "المدينة غير موجودة" }, 404));
     }
 
     const places = await getPlacesInCity(place.location);

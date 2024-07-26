@@ -24,7 +24,6 @@ const UserSchema = new Schema(
     password:{
         type:String,
         required: [true, { english: "Please add a password", arabic: "يرجى إضافة كلمة المرور" }],
-        minlength:[6,"Password must be at least 6 characters"],
         select:false
     },
     passwordConfirm:{

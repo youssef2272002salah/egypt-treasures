@@ -50,11 +50,9 @@ exports.signup = catchAsync(async (req, res, next) => {
   const verificationToken = crypto.randomBytes(32).toString('hex');
   newUser.verificationToken = verificationToken;
   await newUser.save({ validateBeforeSave: false });
-
   const verificationLink = `http://${req.get('host')}/api/v1/users/verify-email?token=${verificationToken}`;
-
+  // console.log(verificationLink);
   await sendVerificationEmail(newUser.email, verificationLink);
-
   createSendToken(newUser, 201, res);
 });
 
@@ -73,7 +71,7 @@ exports.login = catchAsync(async (req, res, next) => {
   }
 
   if (!user.isVerified) {
-    return next(new AppError({ english: 'Please verify your email', arabic: 'يرجى التحقق من بريدك الالكتروني' }, 401));
+    return next(new AppError({ english: 'Please verify your gmail', arabic: 'يرجى التحقق من بريدك الالكتروني' }, 401));
   }
 
   // 3) If everything ok, send token to client
@@ -89,7 +87,7 @@ exports.logout = (req, res) => {
     expires: new Date(Date.now() + 10 * 1000),
     httpOnly: true
   });
-  res.status(200).json({ status: 'success' });
+  res.status(200).json({massage :{ english: 'Logged out', arabic: 'تم تسجيل الخروج بنجاح' } });
 };
 
 exports.protect = catchAsync(async (req, res, next) => {
@@ -108,7 +106,10 @@ exports.protect = catchAsync(async (req, res, next) => {
 
   if (!token) {
     return next(
-      new AppError('You are not logged in! Please log in to get access.', 401)
+      new AppError(
+        { english: 'You are not logged in! Please log in to get access', arabic: ' يرجى تسجيل الدخول للوصول' },
+        401
+      )
     );
   }
 
@@ -120,7 +121,7 @@ exports.protect = catchAsync(async (req, res, next) => {
   if (!currentUser) {
     return next(
       new AppError(
-        'The user belonging to this token does no longer exist.',
+        { english: 'The user belonging to this token does no longer exist.', arabic: 'لا يوجد مستخدم يتعلق بهذا الرمز' },
         401
       )
     );
@@ -190,7 +191,7 @@ exports.verifyEmail = catchAsync(async (req, res, next) => {
   const user = await User.findOne({ verificationToken: token });
 
   if (!user) {
-    return res.status(400).send('Invalid verification link.');
+    return res.status(400).send('Invalid or expired verification token.');
   }
 
   // Mark the email as verified
@@ -213,7 +214,7 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   // 1) Get user based on POSTed email
   const user = await User.findOne({ email: req.body.email });
   if (!user) {
-    return next(new AppError('There is no user with email address.', 404));
+    return next(new AppError({ english: 'There is no user with email address.', arabic: 'لا يوجد مستخدم باستخدام البريد الألكتروني' }, 404));
   }
 
   // 2) Generate the random reset token
@@ -223,7 +224,7 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   // 3) Send it to user's email
   const resetURL = `${req.protocol}://${req.get(
     'host'
-  )}/api/v1/users/reset-password/${resetToken}`;
+  )}/reset-password/${resetToken}`;
 
   const message = `Forgot your password? Submit a PATCH request with your new password and passwordConfirm to: ${resetURL}.\nIf you didn't forget your password, please ignore this email!`;
   
@@ -235,15 +236,21 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
 
     res.status(200).json({
       status: 'success',
-      message: 'Token sent to email!'
+      message: {
+        english: 'Token sent to email',
+        arabic: 'تم ارسال رمز التحقق على البريد الألكتروني'
+      }
     });
   } catch (err) {
+    console.log(err);
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
     await user.save({ validateBeforeSave: false });
 
     return next(
-      new AppError('There was an error sending the email. Try again later!'),
+      new AppError({
+        english: 'There was an error sending the email. Try again later!',
+        arabic: 'حدث خطأ في الإرسال. حاول مرة اخرى في وقت لاحق'}),
       500
     );
   }
@@ -253,6 +260,7 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
 
 
 exports.resetPassword = catchAsync(async (req, res, next) => {
+
   // 1) Get user based on the token
   const hashedToken = crypto
     .createHash('sha256')
@@ -266,8 +274,9 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
 
   // 2) If token has not expired, and there is user, set the new password
   if (!user) {
-    return next(new AppError('Token is invalid or has expired', 400));
+    return next(new AppError({ english: 'Token is invalid or has expired', arabic: 'الرمز غير صالح او منتهي الصلاحية' }, 400));
   }
+
   user.password = req.body.password;
   user.passwordConfirm = req.body.passwordConfirm;
   user.passwordResetToken = undefined;
@@ -285,7 +294,7 @@ exports.updatePassword = catchAsync(async (req, res, next) => {
 
   // 2) Check if POSTed current password is correct
   if (!(await user.correctPassword(req.body.passwordCurrent, user.password))) {
-    return next(new AppError('Your current password is wrong.', 401));
+    return next(new AppError({ english: 'Your current password is wrong.', arabic: 'كلمة المرور الحالية غير صحيحة' }, 401));
   }
 
   // 3) If so, update password
