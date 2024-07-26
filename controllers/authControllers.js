@@ -8,6 +8,7 @@ const sendVerificationEmail = require('../utils/mailer');
 
 
 
+
 const signToken = id => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN
@@ -83,7 +84,16 @@ exports.login = catchAsync(async (req, res, next) => {
 
 
 
+exports.logout = (req, res) => {
+  res.cookie('jwt', 'loggedout', {
+    expires: new Date(Date.now() + 10 * 1000),
+    httpOnly: true
+  });
+  res.status(200).json({ status: 'success' });
+};
+
 exports.protect = catchAsync(async (req, res, next) => {
+
   // 1) Getting token and check of it's there
   let token;
   if (
@@ -91,11 +101,14 @@ exports.protect = catchAsync(async (req, res, next) => {
     req.headers.authorization.startsWith('Bearer')
   ) {
     token = req.headers.authorization.split(' ')[1];
+  } else if (req.cookies.jwt) {
+    
+    token = req.cookies.jwt;
   }
 
   if (!token) {
     return next(
-      new AppError({ english: 'You are not logged in!', arabic: 'الرجاء تسجيل الدخول' }, 401)
+      new AppError('You are not logged in! Please log in to get access.', 401)
     );
   }
 
@@ -107,7 +120,7 @@ exports.protect = catchAsync(async (req, res, next) => {
   if (!currentUser) {
     return next(
       new AppError(
-        { english: 'The user belonging to this token does no longer exist.', arabic: 'المستخدم الذي تم استخدام هذا الرمز الشريطي ليس موجودًا حاليًا' },
+        'The user belonging to this token does no longer exist.',
         401
       )
     );
@@ -122,9 +135,40 @@ exports.protect = catchAsync(async (req, res, next) => {
 
   // GRANT ACCESS TO PROTECTED ROUTE
   req.user = currentUser;
+  res.locals.user = currentUser;
   next();
 });
 
+// Only for rendered pages, no errors!
+exports.isLoggedIn = async (req, res, next) => {
+  if (req.cookies.jwt) {
+    try {
+      // 1) verify token
+      const decoded = await promisify(jwt.verify)(
+        req.cookies.jwt,
+        process.env.JWT_SECRET
+      );
+
+      // 2) Check if user still exists
+      const currentUser = await User.findById(decoded.id);
+      if (!currentUser) {
+        return next();
+      }
+
+      // 3) Check if user changed password after the token was issued
+      if (currentUser.changedPasswordAfter(decoded.iat)) {
+        return next();
+      }
+
+      // THERE IS A LOGGED IN USER
+      res.locals.user = currentUser;
+      return next();
+    } catch (err) {
+      return next();
+    }
+  }
+  next();
+};
 exports.restrictTo = (...roles) => {
   return (req, res, next) => {
     // roles ['admin', 'lead-guide']. role='user'
@@ -142,7 +186,6 @@ exports.restrictTo = (...roles) => {
 
 exports.verifyEmail = catchAsync(async (req, res, next) => {
   const token = req.query.token;
-  console.log(token)
   // Find the user by verification token
   const user = await User.findOne({ verificationToken: token });
 
